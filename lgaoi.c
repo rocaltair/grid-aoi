@@ -160,16 +160,6 @@ static int get_neighbor_idx(aoi_map_t *map, int idx, int *arr, int arr_sz)
 	return n;
 }
 
-static int is_in_arr(int *arr, int len, int v)
-{
-	int i;
-	for (i = 0; i<len; i++) {
-		if (v == arr[i])
-			return 1;
-	}
-	return 0;
-}
-
 static void init_map(aoi_map_t *map,
 		    int width, int height,
 		    int ngrid_width, int ngrid_height,
