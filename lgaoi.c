@@ -19,6 +19,9 @@
 # endif
 #endif
 
+#define MASK_DIS (1<<31)
+
+
 typedef void *QUEUE[2];
 
 /* Private macros. */
@@ -34,15 +37,6 @@ typedef void *QUEUE[2];
 #define QUEUE_FOREACH(q, h)                                                   \
   for ((q) = QUEUE_NEXT(h); (q) != (h); (q) = QUEUE_NEXT(q))
 
-#define QUEUE_FOREACH_R(q, h)                                                 \
-  for ((q) = QUEUE_PREV(h); (q) != (h); (q) = QUEUE_PREV(q))
-
-#define QUEUE_LOOK_NEXT(q, b, l)                                              \
-  for ((q) = b; (q) != l; (q) = QUEUE_NEXT(q))
-
-#define QUEUE_LOOK_PREV(q, b, l)                                              \
-  for ((q) = b; (q) != l; (q) = QUEUE_PREV(q))
-
 #define QUEUE_EMPTY(q)                                                        \
   ((const QUEUE *) (q) == (const QUEUE *) QUEUE_NEXT(q))
 
@@ -56,42 +50,6 @@ typedef void *QUEUE[2];
   do {                                                                        \
     QUEUE_NEXT(q) = (q);                                                      \
     QUEUE_PREV(q) = (q);                                                      \
-  }                                                                           \
-  while (0)
-
-#define QUEUE_INSERT(h, n)                                                    \
-  do {                                                                        \
-	  QUEUE_NEXT(n) = h;                                                  \
-	  QUEUE_PREV(n) = QUEUE_PREV(h);                                      \
-	  QUEUE_PREV_NEXT(n) = n;                                             \
-	  QUEUE_PREV(h) = n;                                                  \
-  } while (0)
-
-#define QUEUE_APPEND(h, n)							\
-  do {										\
-	  QUEUE_NEXT(n) = QUEUE_NEXT(h);					\
-	  QUEUE_NEXT_PREV(h) = n;						\
-	  QUEUE_NEXT(h) = n;							\
-	  QUEUE_PREV(n) = h;							\
-  } while (0)
-
-#define QUEUE_ADD(h, n)                                                       \
-  do {                                                                        \
-    QUEUE_PREV_NEXT(h) = QUEUE_NEXT(n);                                       \
-    QUEUE_NEXT_PREV(n) = QUEUE_PREV(h);                                       \
-    QUEUE_PREV(h) = QUEUE_PREV(n);                                            \
-    QUEUE_PREV_NEXT(h) = (h);                                                 \
-  }                                                                           \
-  while (0)
-
-#define QUEUE_SPLIT(h, q, n)                                                  \
-  do {                                                                        \
-    QUEUE_PREV(n) = QUEUE_PREV(h);                                            \
-    QUEUE_PREV_NEXT(n) = (n);                                                 \
-    QUEUE_NEXT(n) = (q);                                                      \
-    QUEUE_PREV(h) = QUEUE_PREV(q);                                            \
-    QUEUE_PREV_NEXT(h) = (h);                                                 \
-    QUEUE_PREV(q) = (n);                                                      \
   }                                                                           \
   while (0)
 
@@ -113,30 +71,6 @@ typedef void *QUEUE[2];
   }                                                                           \
   while (0)
 
-#define QUEUE_SWAP(q, p)						\
-  do {									\
-	QUEUE *t1, *t2;							\
-	if (QUEUE_NEXT(q) != p && QUEUE_PREV(q) != p) {			\
-		t1 = QUEUE_PREV(q);					\
-		t2 = QUEUE_PREV(p);					\
-		QUEUE_REMOVE(q);					\
-		QUEUE_REMOVE(p);					\
-		QUEUE_APPEND(t1, p);					\
-		QUEUE_APPEND(t2, q);					\
-	} else {							\
-		if (QUEUE_NEXT(p) == q) {				\
-			t1 = p;						\
-			p = q;						\
-			q = t1;						\
-		}							\
-		QUEUE_PREV_NEXT(q) = p;					\
-		QUEUE_PREV(p) = QUEUE_PREV(q);				\
-		QUEUE_NEXT_PREV(p) = q;					\
-		QUEUE_NEXT(q) = QUEUE_NEXT(p);				\
-		QUEUE_NEXT(p) = q;					\
-		QUEUE_PREV(q) = p;					\
-	}								\
-  }while (0)
 
 #define QUEUE_REMOVE(q)                                                       \
   do {                                                                        \
@@ -145,28 +79,6 @@ typedef void *QUEUE[2];
   }                                                                           \
   while (0)
 
-#define QDATA_FREE(p, u) free(p)
-
-#define QUEUE_CLEAR(list, type, field, free_func, udata)		\
-  do {									\
-	  QUEUE *q = QUEUE_HEAD(list);					\
-	  while (q != list) {						\
-		type *p = QUEUE_DATA(q, type, field);			\
-		q = QUEUE_NEXT(q);					\
-		QUEUE_REMOVE(&(p->field));				\
-		free_func(p, udata);					\
-	  }								\
-  } while (0)
-
-static size_t QUEUE_LEN(QUEUE *q)
-{
-	QUEUE *h = NULL;
-	size_t len = 0;
-	QUEUE_FOREACH(h, q) {
-		len++;
-	}
-	return len;
-}
 
 #define AOI_CLASS_MAP "cls{aoi_map_t}"
 #define AOI_CLASS_UNIT "cls{aoi_unit_t}"
@@ -176,9 +88,6 @@ static size_t QUEUE_LEN(QUEUE *q)
 
 #define CHECK_UNIT(L, idx)\
 	((aoi_unit_t *) luaL_checkudata(L, idx, AOI_CLASS_UNIT))
-
-#define AOI_CHECK_QNODE_DIM_NULL(unit, dim)\
-	(QUEUE_EMPTY(&(unit)->qnode_ ## dim))
 
 typedef int32_t aoi_eid_t;
 
@@ -438,14 +347,34 @@ static int lua__get_units_by_gid(lua_State *L)
 	QUEUE *q;
 	aoi_map_t *map = CHECK_MAP(L, 1);
 	int idx = luaL_checkinteger(L, 2);
+	int mask = luaL_optinteger(L, 3, 0);
+	int x = luaL_optinteger(L, 4, 0);
+	int y = luaL_optinteger(L, 5, 0);
+	int dis = luaL_optinteger(L, 6, 0);
+	int ddis = dis * dis;
 	if (idx >= map->grid_cnt || idx < 0)
 		return luaL_error(L, "idx error,[0, %d)", map->grid_cnt);
 	l = &map->grid_list[idx];
 	lua_newtable(L);
 	QUEUE_FOREACH(q, l) {
 		aoi_unit_t *unit = QUEUE_DATA(q, aoi_unit_t, qnode);
-		lua_pushboolean(L, 1);
-		lua_rawseti(L, -2, unit->id);
+		int my_mask = unit->mask;
+		if (mask == 0) {
+			lua_pushboolean(L, 1);
+			lua_rawseti(L, -2, unit->id);
+			continue;
+		}
+		if (((mask & MASK_DIS) && (MASK_DIS & my_mask))
+		    && ((mask ^ MASK_DIS) == 0 || mask & my_mask)) {
+			int dx = x - unit->x;
+			int dy = y - unit->y;
+			int dpower = dx * dx + dy * dy;
+			if (dis > 0 ? dpower <= ddis : dpower <= unit->aoi_r * unit->aoi_r) {
+				lua_pushboolean(L, 1);
+				lua_rawseti(L, -2, unit->id);
+			}
+			continue;
+		}
 	}
 	return 1;
 }
