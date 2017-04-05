@@ -108,8 +108,8 @@ typedef struct {
 	QUEUE qnode;
 	int mask;
 	int aoi_r;
-	int x;
-	int y;
+	float x;
+	float y;
 } aoi_unit_t;
 
 static void cal_grid(int width, int height,
@@ -213,15 +213,15 @@ static int lua__add_unit(lua_State *L)
 	QUEUE *q;
 	aoi_map_t *map = CHECK_MAP(L, 1);
 	aoi_unit_t *unit = CHECK_UNIT(L, 2);
-	unit->x = luaL_checkinteger(L, 3);
-	unit->y = luaL_checkinteger(L, 4);
+	unit->x = (float)luaL_checknumber(L, 3);
+	unit->y = (float)luaL_checknumber(L, 4);
 
 	if (!QUEUE_EMPTY(&unit->qnode)) {
 		return luaL_error(L, "unit already in map");
 	}
 
 
-	idx = mpos2idx(map, unit->x, unit->y);
+	idx = mpos2idx(map, (int)unit->x, (int)unit->y);
 	unit->grid_id = idx;
 	q = &map->grid_list[idx];
 	QUEUE_INSERT_TAIL(q, &unit->qnode);
@@ -272,8 +272,8 @@ static int lua__move_unit(lua_State *L)
 	void *p = NULL;
 	aoi_map_t *map = CHECK_MAP(L, 1);
 	aoi_unit_t *unit = CHECK_UNIT(L, 2);
-	float x = luaL_checknumber(L, 3);
-	float y = luaL_checknumber(L, 4);
+	float x = (float)luaL_checknumber(L, 3);
+	float y = (float)luaL_checknumber(L, 4);
 	if (QUEUE_EMPTY(&unit->qnode)) {
 		return luaL_error(L, "unit not in map");
 	}
@@ -285,8 +285,8 @@ static int lua__move_unit(lua_State *L)
 		return luaL_error(L, "unit not in this map");
 	}
 
-	oid = mpos2idx(map, unit->x, unit->y);
-	nid = mpos2idx(map, x, y);
+	oid = mpos2idx(map, (int)unit->x, (int)unit->y);
+	nid = mpos2idx(map, (int)x, (int)y);
 	unit->x = x;
 	unit->y = y;
 	unit->grid_id = nid;
@@ -307,13 +307,13 @@ static int lua__get_gid_by_pos(lua_State *L)
 {
 	int idx;
 	aoi_map_t *map = CHECK_MAP(L, 1);
-	int x = luaL_checkinteger(L, 2);
-	int y = luaL_checkinteger(L, 3);
+	float x = (float)luaL_checknumber(L, 2);
+	float y = (float)luaL_checknumber(L, 3);
 	if (x < 0 || x >= map->width)
 		return luaL_error(L, "x error![0, %d]", map->width);
 	if (y < 0 || x >= map->height)
 		return luaL_error(L, "y error![0, %d]", map->height);
-	idx = mpos2idx(map, x, y);
+	idx = mpos2idx(map, (int)x, (int)y);
 	lua_pushinteger(L, idx);
 	return 1;
 }
@@ -338,10 +338,10 @@ static int lua__get_units_by_gid(lua_State *L)
 	aoi_map_t *map = CHECK_MAP(L, 1);
 	int idx = luaL_checkinteger(L, 2);
 	int mask = luaL_optinteger(L, 3, 0);
-	int x = luaL_optinteger(L, 4, 0);
-	int y = luaL_optinteger(L, 5, 0);
-	int dis = luaL_optinteger(L, 6, 0);
-	int ddis = dis * dis;
+	float x = (float)luaL_optnumber(L, 4, 0.0);
+	float y = (float)luaL_optnumber(L, 5, 0.0);
+	float dis = (float)luaL_optnumber(L, 6, 0.0);
+	float ddis = dis * dis;
 	if (idx >= map->grid_cnt || idx < 0)
 		return luaL_error(L, "idx error,[0, %d)", map->grid_cnt);
 	l = &map->grid_list[idx];
@@ -354,11 +354,11 @@ static int lua__get_units_by_gid(lua_State *L)
 			lua_rawseti(L, -2, unit->id);
 			continue;
 		}
-		if (((mask & MASK_DIS) && (MASK_DIS & my_mask))
-		    && ((mask ^ MASK_DIS) == 0 || mask & my_mask)) {
-			int dx = x - unit->x;
-			int dy = y - unit->y;
-			int dpower = dx * dx + dy * dy;
+		if ((mask & MASK_DIS)
+		    && ((mask | MASK_DIS) == MASK_DIS || mask & my_mask)) {
+			float dx = x - unit->x;
+			float dy = y - unit->y;
+			float dpower = dx * dx + dy * dy;
 			if (dis > 0 ? dpower <= ddis : dpower <= unit->aoi_r * unit->aoi_r) {
 				lua_pushboolean(L, 1);
 				lua_rawseti(L, -2, unit->id);
