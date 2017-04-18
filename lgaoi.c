@@ -116,8 +116,8 @@ static void cal_grid(int width, int height,
 		     int grid_sz,
 		     int *ngrid_width, int *ngrid_height)
 {
-	*ngrid_width = width / grid_sz + (width % grid_sz > 0 ? 1 : 0);
-	*ngrid_height = height / grid_sz + (height % grid_sz > 0 ? 1 : 0);
+	*ngrid_width = width / grid_sz + 1;
+	*ngrid_height = height / grid_sz + 1;
 }
 
 static int pos2idx(int ngrid_width, int ngrid_height, int grid_sz, int x, int y)
@@ -125,7 +125,7 @@ static int pos2idx(int ngrid_width, int ngrid_height, int grid_sz, int x, int y)
 	int nx, ny;
 	int idx;
 	cal_grid(x, y, grid_sz, &nx, &ny);
-	idx = ny * ngrid_width + nx;
+	idx = (ny - 1) * ngrid_width + nx - 1;
 	return idx;
 }
 
@@ -210,11 +210,12 @@ static int lua__new_map(lua_State *L)
 static int lua__add_unit(lua_State *L)
 {
 	int idx;
+	int x, y;
 	QUEUE *q;
 	aoi_map_t *map = CHECK_MAP(L, 1);
 	aoi_unit_t *unit = CHECK_UNIT(L, 2);
-	unit->x = (int)luaL_checknumber(L, 3);
-	unit->y = (int)luaL_checknumber(L, 4);
+	x = (int)luaL_checknumber(L, 3);
+	y = (int)luaL_checknumber(L, 4);
 
 	if (!QUEUE_EMPTY(&unit->qnode)) {
 		return luaL_error(L, "unit already in map");
@@ -226,9 +227,18 @@ static int lua__add_unit(lua_State *L)
 	if (!lua_isnoneornil(L, -1)) {
 		return luaL_error(L, "unit id dumplicate id=%d", unit->id);
 	}
+	idx = mpos2idx(map, x, y);
+	if (idx >= map->grid_cnt || idx < 0) {
+                return luaL_error(L,
+				  "pos(%d,%d) not in map(%d,%d),idx=%d,[0,%d)",
+				  x, y,
+				  map->width, map->height,
+				  idx, map->grid_cnt);
+	}
 	lua_pop(L, 2);
+	unit->x = x;
+	unit->y = y;
 
-	idx = mpos2idx(map, unit->x, unit->y);
 	unit->grid_id = idx;
 	q = &map->grid_list[idx];
 	QUEUE_INSERT_TAIL(q, &unit->qnode);
@@ -270,6 +280,7 @@ static int lua__del_unit(lua_State *L)
 	QUEUE_REMOVE(&unit->qnode);
 	QUEUE_INIT(&unit->qnode);
 	map->unit_cnt--;
+	assert(map->unit_cnt >= 0);
 
 	idx = unit->grid_id;
 	lua_pushinteger(L, idx);
@@ -282,10 +293,17 @@ static int lua__move_unit(lua_State *L)
 	void *p = NULL;
 	aoi_map_t *map = CHECK_MAP(L, 1);
 	aoi_unit_t *unit = CHECK_UNIT(L, 2);
-	float x = (float)luaL_checknumber(L, 3);
-	float y = (float)luaL_checknumber(L, 4);
+	int x = (int)luaL_checknumber(L, 3);
+	int y = (int)luaL_checknumber(L, 4);
 	if (QUEUE_EMPTY(&unit->qnode)) {
 		return luaL_error(L, "unit not in map");
+	}
+	nid = mpos2idx(map, x, y);
+	if (nid < 0 || nid>= map->grid_cnt) {
+                return luaL_error(L,
+				  "pos(%d,%d) not in map(%d,%d)",
+				  x, y,
+				  map->width, map->height);
 	}
 	lua_getuservalue(L, 1);
 	lua_pushinteger(L, unit->id);
@@ -296,9 +314,8 @@ static int lua__move_unit(lua_State *L)
 	}
 
 	oid = unit->grid_id;
-	nid = mpos2idx(map, (int)x, (int)y);
-	unit->x = (int)x;
-	unit->y = (int)y;
+	unit->x = x;
+	unit->y = y;
 	if (oid != nid) {
 		unit->grid_id = nid;
 		QUEUE_REMOVE(&unit->qnode);
@@ -322,9 +339,9 @@ static int lua__get_gid_by_pos(lua_State *L)
 	int x = (int)luaL_checknumber(L, 2);
 	int y = (int)luaL_checknumber(L, 3);
 	if (x < 0 || x >= map->width)
-		return luaL_error(L, "x(%f) error![0, %d]", x, map->width);
+		return luaL_error(L, "x(%d) error![0, %d]", x, map->width);
 	if (y < 0 || y >= map->height)
-		return luaL_error(L, "y(%f) error![0, %d]", y, map->height);
+		return luaL_error(L, "y(%d) error![0, %d]", y, map->height);
 	idx = mpos2idx(map, x, y);
 	lua_pushinteger(L, idx);
 	return 1;
