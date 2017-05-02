@@ -513,8 +513,7 @@ static int opencls__unit(lua_State *L)
 		{NULL, NULL},
 	};
 	luaL_newmetatable(L, AOI_CLASS_UNIT);
-	lua_newtable(L);
-	luaL_register(L, NULL, lmethods);
+	luaL_newlib(L, lmethods);
 	lua_setfield(L, -2, "__index");
 	return 1;
 }
@@ -549,8 +548,7 @@ static int opencls__map(lua_State *L)
 		{NULL, NULL},
 	};
 	luaL_newmetatable(L, AOI_CLASS_MAP);
-	lua_newtable(L);
-	luaL_register(L, NULL, lmethods);
+	luaL_newlib(L, lmethods);
 	lua_setfield(L, -2, "__index");
 	lua_pushcfunction (L, lua__map_gc);
 	lua_setfield (L, -2, "__gc");
